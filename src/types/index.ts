@@ -17,8 +17,16 @@ export interface ContentProp {
 	status: string;
 	excerpt?: string | undefined;
 	feature_image?: string;
+	updated_at?: string;
 }
 
 export interface DataProp {
 	content: string;
+}
+
+export interface GhostPost {
+	id: string;
+	title: string;
+	status: string;
+	updated_at: string;
 }
