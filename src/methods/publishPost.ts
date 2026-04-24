@@ -16,6 +16,15 @@ const MarkdownIt = require("markdown-it");
 
 const md = new MarkdownIt();
 
+function formatTags(raw: string | string[] | undefined): { name: string }[] {
+	if (!raw) return [];
+	const list = Array.isArray(raw) ? raw : raw.split(",").map(s => s.trim());
+	return list
+		.map(t => t.replace(/^#/, "").trim())
+		.filter(Boolean)
+		.map(name => ({ name }));
+}
+
 export const publishPost = async (view: MarkdownView, settings: SettingsProp) => {
 	const key = settings.adminToken;
 	if (!key.includes(":")) {
@@ -66,16 +75,28 @@ export const publishPost = async (view: MarkdownView, settings: SettingsProp) =>
 			}
 		}
 
+		// --- COLLECT TAGS ---
+		// @ts-ignore
+		const fileCache = app.metadataCache.getFileCache(noteFile);
+		const fmTags: string[] = metaMatter?.tags
+			? (Array.isArray(metaMatter.tags) ? metaMatter.tags : String(metaMatter.tags).split(",").map((s: string) => s.trim()))
+			: [];
+		const inlineTags: string[] = (fileCache?.tags ?? []).map((t: any) => t.tag);
+		const hasTags = fmTags.length > 0 || inlineTags.length > 0;
+		const allTags = [...new Set([...fmTags, ...inlineTags])];
+
 		// --- BUILD POST BODY ---
 		const postBody: any = {
 			title: metaMatter?.title || view.file?.basename || noteFile.basename,
-			tags: metaMatter?.tags || [],
 			featured: metaMatter?.featured || false,
 			status: metaMatter?.published ? "published" : "draft",
 			excerpt: metaMatter?.excerpt || undefined,
 			feature_image: featureImage,
 			html,
 		};
+		if (hasTags) {
+			postBody.tags = formatTags(allTags);
+		}
 
 		// --- CREATE OR UPDATE ---
 		const ghostId: string | undefined = metaMatter?.ghost_id;
@@ -87,6 +108,7 @@ export const publishPost = async (view: MarkdownView, settings: SettingsProp) =>
 				const getToken = signToken(key);
 				const existing = await getPost(settings.url, getToken, ghostId);
 				postBody.updated_at = existing.updated_at;
+				postBody.status = metaMatter?.published ? "published" : existing.status;
 
 				if (settings.debug) console.log("[Ghost] Updating post:", ghostId);
 				const putToken = signToken(key);
